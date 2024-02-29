@@ -59,8 +59,6 @@ delay 2
 
 if ( "$statusProvedor1"="down" and "$statusProvedor2"="down" ) do={
   /interface/enable [find comment="LTE"]
-  /ip/firewall/filter enable [find comment="WARNING"]
 } else={
   /interface/disable [find comment="LTE"]
-  /ip/firewall/filter disable [find comment="WARNING"]
 }
