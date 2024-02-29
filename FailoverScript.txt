@@ -1,0 +1,66 @@
+# FAILOVER - adicionar em /system/script
+# script de failover para o cenário
+# dois discadores pppoe-client e uma interface extra com dhcp-client
+# exemplo:
+# ether1 = provedor01, ether2 = provedor02, ether3 = LTE
+# as distâncias devem ficar na ordem provedor 1 = 1, provedor 2 = 3, LTE igual a 1 (tudo de forma dinâmica, não é necessário adicionar rota
+# default manualmente na tabela de roteamento
+# LÓGICA
+# Se o provedor 1 estiver UP, coloque a distancia 1 para ele
+# Se o provedor 2 estiver UP, permanece a distancia 3
+# Se o provedor 1 ficar DOWN, adicione distancia 5 para provedor 1 e mantenha distancia 3 para provedor 2, fazendo provedor 2 ficar como principal
+# Se provedor 1 e 2 estiverem DOWN, ative a interface LTE como última opção
+# Se provedor 1 ou 2 estiverem UP novamente, desative a interface LTE
+# 
+
+:global statusProvedor1
+:global statusProvedor2
+:global ignoreGateway "192.168.100.1"
+:global provedorPrincipal "pppoe-Lig10"
+:global testeICMP {"8.8.8.8"; "1.1.1.1"; "9.9.9.9"}
+:global percPING 6
+:global resPING 0
+
+foreach i in=[/ip/route/find dst-address="0.0.0.0/0" routing-table<>""] do={
+  :global gateway [/ip/route/get number=$i gateway ]
+
+  delay 3
+
+  if ( "$ignoreGateway"!="$gateway" ) do={
+
+    foreach i in=$testeICMP do={
+      :global resultProvedor [/ping count=3 interface=$gateway address=$i];
+      :global resPING ($resPING + $resultProvedor)
+    }
+
+    delay 2
+
+    if ( $resPING <= $percPING ) do={ 
+      if ( "$gateway"="$provedorPrincipal" ) do={
+        :set statusProvedor1 "down" ;
+        /ip/route/set distance=5 [/ip/route/find dst-address=0.0.0.0/0 gateway=$provedorPrincipal ]
+      } else={
+        :set statusProvedor2 "down" ;
+      }
+    } else={ 
+      if ( "$gateway"="$provedorPrincipal" ) do={
+        :set statusProvedor1 "up" ;
+        /ip/route/set distance=1 [/ip/route/find dst-address=0.0.0.0/0 gateway=$provedorPrincipal ]
+      } else={
+        :set statusProvedor2 "up" ;
+      }
+    }
+
+    :set resPING 0 
+  }
+}
+
+delay 2
+
+if ( "$statusProvedor1"="down" and "$statusProvedor2"="down" ) do={
+  /interface/enable [find comment="LTE"]
+  /ip/firewall/filter enable [find comment="WARNING"]
+} else={
+  /interface/disable [find comment="LTE"]
+  /ip/firewall/filter disable [find comment="WARNING"]
+}
