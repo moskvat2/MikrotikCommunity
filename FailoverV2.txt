@@ -1,0 +1,54 @@
+:global statusProvedor1
+:global statusProvedor2
+:global ignoreGateway "192.168.100.1"
+:global provedorPrincipal "pppoe-Provedor01"
+:global testeICMP {"8.8.8.8"; "1.1.1.1"; "9.9.9.9"}
+:global percPING 6
+:global resPING 0
+
+foreach i in=[/ip/route/find dst-address="0.0.0.0/0" routing-table<>""] do={
+  :global gateway [/ip/route/get number=$i gateway ]
+
+  delay 2
+
+  if ( $ignoreGateway != $gateway ) do={
+    :set resPING 0
+
+    foreach i in=$testeICMP do={
+      :local resultProvedor [/ping count=3 interface=$gateway address=$i]
+      :set resPING ($resPING + $resultProvedor)
+    }
+
+    delay 2
+
+    if ( $resPING <= $percPING ) do={ 
+      if ( $gateway = $provedorPrincipal ) do={
+        :set statusProvedor1 "down"
+        /ip/route/set distance=5 [/ip/route/find dst-address=0.0.0.0/0 gateway=$provedorPrincipal ]
+        :log info "Provedor-01 fora"
+      } else={
+        :set statusProvedor2 "down"
+        :log info "Provedor-02 fora"
+      }
+    } else={ 
+      if ( $gateway = $provedorPrincipal ) do={
+        :set statusProvedor1 "up"
+        /ip/route/set distance=1 [/ip/route/find dst-address=0.0.0.0/0 gateway=$provedorPrincipal ]
+        :log info "Provedor-01 ativo"
+      } else={
+        :set statusProvedor2 "up"
+        :log info "Provedor-02 ativo"
+      }
+    }
+  }
+}
+
+delay 2
+
+if ( "$statusProvedor1"="down" and "$statusProvedor2"="down" ) do={
+  /interface/enable [find comment="LTE"]
+  /ip/firewall/filter enable [find comment="WARNING"]
+} else={
+   /interface/disable [find comment="LTE"]
+   /ip/firewall/filter disable [find comment="WARNING"]
+}
