@@ -1,0 +1,107 @@
+# feb/16/2023 12:18:16 by RouterOS 7.7
+# software id = 
+#
+/interface bridge
+add name=bridge1-LAN
+/interface ethernet
+set [ find default-name=ether1 ] disabled=yes
+set [ find default-name=ether2 ] name=ether2-Provedor02
+set [ find default-name=ether3 ] name=ether3-Provedor01
+/interface pppoe-client
+add add-default-route=yes disabled=no interface=ether3-Provedor01 name=\
+    ProvedorPrincipal password=cliente use-peer-dns=yes user=cliente
+/interface lte apn
+set [ find default=yes ] ip-type=ipv4 use-network-apn=no
+/interface wireless security-profiles
+set [ find default=yes ] supplicant-identity=MikroTik
+/ip pool
+add name=dhcp_pool0 ranges=192.168.3.2-192.168.3.254
+/ip dhcp-server
+# DHCP server can not run on slave interface!
+add address-pool=dhcp_pool0 interface=ether4 name=dhcp1
+/ip vrf
+add comment="!== VRF PARA TESTE" interfaces=none name=TEST-LinkSecundario
+add comment="!== VRF PARA TESTE" interfaces=none name=TEST-LinkPrincipal
+/port
+set 0 name=serial0
+/routing bgp template
+set default disabled=no output.network=bgp-networks
+/routing ospf instance
+add disabled=no name=default-v2
+/routing ospf area
+add disabled=yes instance=default-v2 name=backbone-v2
+/routing table
+add fib name=rota_Provedor02
+add fib name=rota_Provedor01
+/interface bridge port
+add bridge=bridge1-LAN interface=ether4
+/ip settings
+set max-neighbor-entries=8192
+/ipv6 settings
+set disable-ipv6=yes max-neighbor-entries=8192
+/interface ovpn-server server
+set auth=sha1,md5
+/ip address
+add address=192.168.3.1/24 interface=ether4 network=192.168.3.0
+/ip dhcp-client
+add default-route-distance=10 interface=ether2-Provedor02
+/ip dhcp-server network
+add address=192.168.3.0/24 dns-server=192.168.3.1 gateway=192.168.3.1
+/ip dns
+set allow-remote-requests=yes servers=208.67.222.222
+/ip firewall mangle
+add action=mark-connection chain=prerouting comment=connProvedor02 \
+    connection-mark=no-mark disabled=yes dst-port=8291 in-interface=\
+    ether2-Provedor02 new-connection-mark=connProvedor02 passthrough=yes protocol=\
+    tcp
+add action=mark-connection chain=prerouting comment=connProvedor01 connection-mark=\
+    no-mark disabled=yes dst-port=8291 in-interface=ether3-Provedor01 new-connection-mark=\
+    connProvedor01 passthrough=yes protocol=tcp
+add action=mark-connection chain=prerouting comment=connProvedor01--->LAN \
+    connection-mark=no-mark disabled=yes dst-port=9000 in-interface=ether3-Provedor01 \
+    new-connection-mark=connProvedor01 protocol=tcp
+add action=mark-connection chain=prerouting comment=connProvedor02--->LAN \
+    connection-mark=no-mark disabled=yes dst-port=9000 in-interface=\
+    ether2-Provedor02 new-connection-mark=connProvedor02 protocol=tcp
+add action=mark-routing chain=prerouting comment=return_connProvedor01 \
+    connection-mark=connProvedor01 disabled=yes in-interface=ether4 \
+    new-routing-mark=rota_Provedor01
+add action=mark-routing chain=prerouting comment=return_connProvedor02 \
+    connection-mark=connProvedor02 disabled=yes in-interface=ether4 \
+    new-routing-mark=rota_Provedor02
+add action=mark-routing chain=output comment=markRouteProvedor02 \
+    connection-mark=connProvedor02 disabled=yes new-routing-mark=rota_Provedor02 \
+    passthrough=yes
+add action=mark-routing chain=output comment=markRouteProvedor01 connection-mark=\
+    connProvedor01 disabled=yes new-routing-mark=rota_Provedor01 passthrough=yes
+/ip firewall nat
+add action=masquerade chain=srcnat out-interface=!bridge1-LAN
+/ip route
+add check-gateway=ping comment=LinkPrincipal disabled=no distance=1 \
+    dst-address=0.0.0.0/0 gateway=100.64.64.0 pref-src=0.0.0.0 routing-table=\
+    main scope=30 suppress-hw-offload=no target-scope=10
+add check-gateway=ping comment=LinkSecundario disabled=no distance=3 \
+    dst-address=0.0.0.0/0 gateway=10.0.0.254 pref-src=0.0.0.0 routing-table=\
+    main scope=30 suppress-hw-offload=no target-scope=10
+add disabled=no distance=1 dst-address=208.67.222.222/32 gateway=100.64.64.0 \
+    pref-src=0.0.0.0 routing-table=main scope=30 suppress-hw-offload=no \
+    target-scope=10
+/routing rule
+add action=lookup-only-in-table comment=\
+    "!== FORCE TESTE DE FAILOVER ==> LINK 1" disabled=no routing-mark=\
+    TEST-LinkPrincipal table=TEST-LinkPrincipal
+add action=lookup-only-in-table comment=\
+    "!== FORCE TESTE DE FAILOVER ==> LINK 1" disabled=no routing-mark=\
+    TEST-LinkSecundario table=TEST-LinkSecundario
+/system identity
+set name=CLIENTE
+/system package update
+set channel=development
+/tool netwatch
+add disabled=no down-script="/ip route set [find where comment=\"LinkPrincipal\
+    \"] distance=3\r\
+    \n/ip route set [find where comment=\"LinkSecundario\"] distance=1" host=\
+    208.67.222.222 http-codes="" interval=10s test-script="" type=icmp \
+    up-script="/ip route set [find where comment=\"LinkPrincipal\"] distance=1\
+    \r\
+    \n/ip route set [find where comment=\"LinkSecundario\"] distance=3"
