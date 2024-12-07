@@ -1,0 +1,15 @@
+# Crie uma interface list em INTERFACES - INTERFACE LIST
+# Depois adiciona a interface que você utiliza para internet na lista criada
+# No exemplo abaixo utilizei o nome para interface list como WAN
+
+/ip firewall filter
+add action=drop chain=input comment=INVALIDAS connection-state=invalid \
+    in-interface-list=WAN log-prefix=INVALIDAS
+add action=accept chain=input comment=EST/REL connection-state=established,related \
+    in-interface-list=WAN
+add action=accept chain=input comment=ICMP in-interface-list=WAN limit=3,3:packet \
+    protocol=icmp
+add action=accept chain=input comment=GERENCIA_MK dst-port=8291 \
+    in-interface-list=WAN protocol=tcp
+add action=drop chain=input comment=DROP_GERAL in-interface-list=WAN log-prefix=\
+    DROP_GERAL
