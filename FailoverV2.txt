@@ -3,6 +3,7 @@
 :global disableLTE
 :global ignoreGateway "192.168.100.1"
 :global provedorPrincipal "pppoe-provedor01"
+:global provedorSecundario "pppoe-provedor02"
 :global testeICMP {"8.8.8.8"; "1.1.1.1"; "9.9.9.9"}
 :global percPING 6
 :global resPING 0
@@ -33,6 +34,7 @@ foreach i in=[/ip/route/find dst-address="0.0.0.0/0" routing-table<>""] do={
       if ( $gateway = $provedorPrincipal ) do={
         :set statusProvedor1 "up"
         /ip/route/set distance=1 [/ip/route/find dst-address=0.0.0.0/0 gateway=$provedorPrincipal ]
+        /ip/route/set distance=2 [/ip/route/find dst-address=0.0.0.0/0 gateway=$provedorSecundario ]
       } else={
         :set statusProvedor2 "up"
       }
@@ -41,6 +43,8 @@ foreach i in=[/ip/route/find dst-address="0.0.0.0/0" routing-table<>""] do={
 }
 
 delay 2
+
+### Utilize LTE somente se necessario, caso nao precise remova as linhas abaixo
 
 if ( "$statusProvedor1"="down" and "$statusProvedor2"="down" ) do={
   /interface/enable [find comment="LTE"]
