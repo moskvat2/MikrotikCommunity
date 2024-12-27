@@ -1,4 +1,7 @@
 ### CONFIGURACAO PARA LOADBALANCE ENTRE 2 PROVEDORES
+/ip firewall filter
+add action=fasttrack-connection chain=forward connection-state=established,related,untracked hw-offload=yes
+
 /ip firewall address-list
 add address=172.16.0.0/24 comment=RedeLocal list=Local_Network
 
