@@ -1,0 +1,29 @@
+### CONFIGURACAO PARA LOADBALANCE ENTRE 2 PROVEDORES
+/ip firewall address-list
+add address=172.16.0.0/24 comment=RedeLocal list=Local_Network
+
+/routing table
+add disabled=no fib name=to_Provedor01
+add disabled=no fib name=to_Provedor02
+
+/ip route
+add disabled=no distance=2 dst-address=0.0.0.0/0 gateway=pppoe-Provedor01 pref-src="" routing-table=to_Provedor01 scope=\
+    30 suppress-hw-offload=no target-scope=10
+add disabled=no distance=1 dst-address=0.0.0.0/0 gateway=pppoe-Provedor02 pref-src="" routing-table=to_Provedor02 scope=\
+    30 suppress-hw-offload=no target-scope=10
+
+/ip firewall mangle
+add action=accept chain=prerouting dst-address-list=Local_Network in-interface=bridge-LAN src-address-list=\
+    Local_Network
+
+add action=mark-connection chain=prerouting comment=pppoe-Provedor01 connection-mark=no-mark connection-state=new \
+    dst-address=!172.16.0.0/24 dst-address-type=!local new-connection-mark=connection_Provedor01 passthrough=yes \
+    per-connection-classifier=src-address-and-port:2/0 src-address=172.16.0.0/24
+add action=mark-connection chain=prerouting comment=pppoe-Provedor02 connection-mark=no-mark connection-state=new \
+    dst-address=!172.16.0.0/24 dst-address-type=!local new-connection-mark=connection_Provedor02 passthrough=yes \
+    per-connection-classifier=src-address-and-port:2/1 src-address=172.16.0.0/24
+	
+add action=mark-routing chain=prerouting comment=route_Provedor01 connection-mark=connection_Provedor01 in-interface=\
+    bridge-LAN new-routing-mark=to_Provedor01 passthrough=no
+add action=mark-routing chain=prerouting comment=route_Provedor02 connection-mark=connection_Provedor02 in-interface=\
+    bridge-LAN new-routing-mark=to_Provedor02 passthrough=no
